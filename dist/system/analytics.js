@@ -112,16 +112,17 @@ System.register(['aurelia-dependency-injection', 'aurelia-event-aggregator', 'au
 
 					this._trackClick = this._trackClick.bind(this);
 					this._trackPage = this._trackPage.bind(this);
-
-					if (!this._options.useNativeGaScript) {
-						this._initialized = true;
-					}
 				}
 
 				Analytics.prototype.attach = function attach() {
 					var options = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : defaultOptions;
 
 					this._options = deepmerge(defaultOptions, options);
+
+					if (!this._options.useNativeGaScript) {
+						this._initialized = true;
+					}
+
 					if (!this._initialized) {
 						var errorMessage = "Analytics must be initialized before use.";
 						this._log('error', errorMessage);
