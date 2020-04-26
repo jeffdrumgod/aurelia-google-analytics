@@ -52,6 +52,7 @@ System.register(['aurelia-dependency-injection', 'aurelia-event-aggregator', 'au
 				}
 			};
 			defaultOptions = {
+				useNativeGaScript: true,
 				logging: {
 					enabled: true
 				},
@@ -70,18 +71,21 @@ System.register(['aurelia-dependency-injection', 'aurelia-event-aggregator', 'au
 					},
 					getUrl: function getUrl(payload) {
 						return payload.instruction.fragment;
-					}
+					},
+					customFnTrack: false
 				},
 				clickTracking: {
 					enabled: false,
 					filter: function filter(element) {
 						return criteria.isAnchor(element) || criteria.isButton(element);
-					}
+					},
+					customFnTrack: false
 				},
 				exceptionTracking: {
 					enabled: true,
 					applicationName: undefined,
-					applicationVersion: undefined
+					applicationVersion: undefined,
+					customFnTrack: false
 				}
 			};
 
@@ -108,6 +112,10 @@ System.register(['aurelia-dependency-injection', 'aurelia-event-aggregator', 'au
 
 					this._trackClick = this._trackClick.bind(this);
 					this._trackPage = this._trackPage.bind(this);
+
+					if (!this._options.useNativeGaScript) {
+						this._initialized = true;
+					}
 				}
 
 				Analytics.prototype.attach = function attach() {
@@ -126,17 +134,30 @@ System.register(['aurelia-dependency-injection', 'aurelia-event-aggregator', 'au
 				};
 
 				Analytics.prototype.init = function init(id) {
+					if (!this._options.useNativeGaScript) {
+						return;
+					}
+
 					var script = document.createElement('script');
 					script.text = "(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){" + "(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o)," + "m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)" + "})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');";
 					document.querySelector('body').appendChild(script);
 
+					this._initFnGa();
+					ga.l = +new Date();
+					this._sendFnGa('create', id, 'auto');
+
+					this._initialized = true;
+				};
+
+				Analytics.prototype._initFnGa = function _initFnGa() {
 					window.ga = window.ga || function () {
 						(ga.q = ga.q || []).push(arguments);
 					};
-					ga.l = +new Date();
-					ga('create', id, 'auto');
+				};
 
-					this._initialized = true;
+				Analytics.prototype._sendFnGa = function _sendFnGa() {
+					this._initFnGa();
+					window.ga.apply(window.ga, arguments);
 				};
 
 				Analytics.prototype._attachClickTracker = function _attachClickTracker() {
@@ -202,7 +223,10 @@ System.register(['aurelia-dependency-injection', 'aurelia-event-aggregator', 'au
 								exOptions.appVersion = options.exceptionTracking.applicationVersion;
 							}
 
-							ga('send', 'exception', exOptions);
+							if (options.exceptionTracking.customFnTrack) {
+								return options.exceptionTracking.customFnTrack(exOptions);
+							}
+							this._sendFnGa('send', 'exception', exOptions);
 						}
 
 						if (typeof existingWindowErrorCallback === 'function') {
@@ -239,7 +263,11 @@ System.register(['aurelia-dependency-injection', 'aurelia-event-aggregator', 'au
 					};
 
 					this._log('debug', 'click: category \'' + tracking.category + '\', action \'' + tracking.action + '\', label \'' + tracking.label + '\', value \'' + tracking.value + '\'');
-					ga('send', 'event', tracking.category, tracking.action, tracking.label, tracking.value);
+					if (this._options.clickTracking.customFnTrack) {
+						return this._options.clickTracking.customFnTrack(tracking);
+					}
+
+					this._sendFnGa('send', 'event', tracking.category, tracking.action, tracking.label, tracking.value);
 				};
 
 				Analytics.prototype._trackPage = function _trackPage(path, title) {
@@ -249,12 +277,18 @@ System.register(['aurelia-dependency-injection', 'aurelia-event-aggregator', 'au
 						return;
 					}
 
-					ga('set', {
+					var props = {
 						page: path,
 						title: title,
 						anonymizeIp: this._options.anonymizeIp.enabled
-					});
-					ga('send', 'pageview');
+					};
+
+					if (this._options.pageTracking.customFnTrack) {
+						return this._options.pageTracking.customFnTrack(props);
+					}
+
+					this._sendFnGa('set', props);
+					this._sendFnGa('send', 'pageview');
 				};
 
 				return Analytics;
